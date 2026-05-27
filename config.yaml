@@ -1,0 +1,67 @@
+# Pulsar 主配置 (Phase 1)
+system:
+  name: "Pulsar"
+  version: "0.1.0"
+  data_dir: "./data"
+  log_level: "INFO"
+
+runtime:
+  heartbeat_interval: 15
+  max_restart_attempts: 3
+  restart_delay: 5
+  drain_timeout: 30
+
+gateway:
+  default_provider: "deepseek"
+  fallback_provider: "local"
+  timeout: 30
+  max_retries: 3
+  retry_delay: 2
+  providers:
+    deepseek:
+      type: openai
+      base_url: "https://api.deepseek.com/v1"
+      api_key: "${DEEPSEEK_API_KEY}"
+      model: "deepseek-chat"
+      max_tokens: 4096
+    local:
+      type: openai
+      base_url: "http://localhost:8080/v1"
+      api_key: "not-needed"
+      model: "qwen2.5-14b"
+
+adapters:
+  wechat:
+    enabled: true
+    app_id: "${WECHAT_APP_ID}"
+    app_secret: "${WECHAT_APP_SECRET}"
+    token_cache_ttl: 7200
+    api_base: "https://api.weixin.qq.com"
+    rate_limit:
+      max_calls_per_minute: 100
+      max_calls_per_hour: 2000
+
+interaction:
+  cli:
+    enabled: true
+    prompt_format: "rich"
+  mcp_server:
+    enabled: true
+    transport: "stdio"
+    host: "0.0.0.0"
+    port: 8910
+
+scheduler:
+  enabled: true
+  jobs:
+    - name: "daily_publish"
+      schedule: "0 17 * * *"
+      task:
+        type: "publish"
+        platform: "wechat"
+
+audit:
+  enabled: true
+  output: "file"
+  path: "./data/logs/audit.log"
+  log_levels: ["tool_call", "system_event", "auth"]
