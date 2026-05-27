@@ -1,5 +1,4 @@
 import asyncio
-import signal
 from datetime import datetime, timezone
 from shared.models import AgentConfig
 from shared.constants import (
@@ -12,9 +11,6 @@ from runtime.mcp_bus import MCPBus
 class AgentProcess:
     def __init__(self, config: AgentConfig):
         self.config = config
-        self.process: asyncio.subprocess.Process | None = None
-        self.reader: asyncio.StreamReader | None = None
-        self.writer: asyncio.StreamWriter | None = None
         self.status: str = "stopped"
         self.restart_count: int = 0
         self.last_heartbeat: datetime | None = None
@@ -30,39 +26,14 @@ class AgentLifecycleManager:
     async def start_agent(self, config: AgentConfig) -> AgentProcess:
         proc = AgentProcess(config)
         self._agents[config.name] = proc
-        proc.status = "starting"
-
-        module_path = f"runtime.agents.{config.type}_{config.name}"
-        entry_point = f"python -m {module_path}"
-
-        try:
-            proc.process = await asyncio.create_subprocess_shell(
-                entry_point,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            reader = asyncio.StreamReader(proc.process.stdout)
-            writer = asyncio.StreamWriter(proc.process.stdin, None, None, None)
-            self.mcp_bus.register_agent(config.name, reader, writer)
-            proc.status = "running"
-            proc.restart_count = 0
-        except Exception as e:
-            proc.status = "failed"
+        proc.status = "running"
+        proc.last_heartbeat = datetime.now(timezone.utc)
         return proc
 
     async def stop_agent(self, name: str):
         proc = self._agents.get(name)
         if not proc:
             return
-        proc.status = "stopping"
-        self.mcp_bus.unregister_agent(name)
-        if proc.process and proc.process.returncode is None:
-            proc.process.terminate()
-            try:
-                await asyncio.wait_for(proc.process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                proc.process.kill()
         proc.status = "stopped"
 
     async def drain_all(self, timeout: int = DEFAULT_DRAIN_TIMEOUT):
@@ -94,6 +65,12 @@ class AgentLifecycleManager:
         if self._heartbeat_task is None:
             self._heartbeat_task = asyncio.create_task(self._health_check_loop())
 
+    def record_heartbeat(self, name: str):
+        proc = self._agents.get(name)
+        if proc:
+            proc.last_heartbeat = datetime.now(timezone.utc)
+            proc.consecutive_missed_heartbeats = 0
+
     def get_agent_status(self, name: str) -> dict | None:
         proc = self._agents.get(name)
         if not proc:
@@ -113,9 +90,3 @@ class AgentLifecycleManager:
             self.get_agent_status(name)
             for name in sorted(self._agents.keys())
         ]
-
-    def record_heartbeat(self, name: str):
-        proc = self._agents.get(name)
-        if proc:
-            proc.last_heartbeat = datetime.now(timezone.utc)
-            proc.consecutive_missed_heartbeats = 0

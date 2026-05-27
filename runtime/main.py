@@ -9,6 +9,11 @@ from runtime.health import HealthChecker
 from runtime.logging import AuditLogger
 from shared.models import PulsarConfig, AgentConfig
 from shared.constants import DEFAULT_DRAIN_TIMEOUT
+from execution.tools.registry import registry as tool_registry
+from execution.tools.builtins.http import http_request
+from execution.tools.builtins.fileio import file_read, file_write, json_parse
+from execution.tools.builtins.image import image_process
+from execution.tools.builtins.template import template_render
 
 
 class PulsarRuntime:
@@ -21,9 +26,12 @@ class PulsarRuntime:
         self.health = HealthChecker()
         self.logger = AuditLogger(self.config.audit)
         self._shutdown_event = asyncio.Event()
+        self._wechat_adapter = None
 
     async def start(self):
         self.logger.log_system_event("runtime", "start", {"config_path": self.config_path})
+        self._register_builtin_tools()
+        await self._init_wechat_adapter()
 
         agent_configs = [
             AgentConfig(name="gateway", layer=1, type="gateway"),
@@ -31,11 +39,9 @@ class PulsarRuntime:
             AgentConfig(name="tools", layer=4, type="tool"),
             AgentConfig(name="cli", layer=5, type="runtime"),
         ]
-
         for ac in agent_configs:
-            if self.config.adapters.get("wechat", {}).get("enabled", True):
-                await self.lifecycle.start_agent(ac)
-                self.health.register_agent(ac.name)
+            await self.lifecycle.start_agent(ac)
+            self.health.register_agent(ac.name)
 
         self.lifecycle.start_health_checks()
         self.logger.log_system_event("runtime", "started", {"agents": self.lifecycle.get_all_status()})
@@ -43,10 +49,29 @@ class PulsarRuntime:
         self._shutdown_event.clear()
 
         try:
-            config_check_task = asyncio.create_task(self._config_watch_loop())
+            asyncio.create_task(self._config_watch_loop())
             await self.mcp_bus.listen()
         except asyncio.CancelledError:
             pass
+
+    def _register_builtin_tools(self):
+        tool_registry.register(http_request)
+        tool_registry.register(file_read)
+        tool_registry.register(file_write)
+        tool_registry.register(json_parse)
+        tool_registry.register(image_process)
+        tool_registry.register(template_render)
+
+    async def _init_wechat_adapter(self):
+        wechat_cfg = self.config.adapters.get("wechat", {})
+        if wechat_cfg.get("enabled", True):
+            from execution.adapters.wechat.tools import _init_tm
+            _init_tm(
+                app_id=wechat_cfg.get("app_id", ""),
+                app_secret=wechat_cfg.get("app_secret", ""),
+                api_base=wechat_cfg.get("api_base", "https://api.weixin.qq.com"),
+                cache_ttl=wechat_cfg.get("token_cache_ttl", 7200),
+            )
 
     async def _config_watch_loop(self):
         while not self._shutdown_event.is_set():
@@ -71,7 +96,6 @@ class PulsarRuntime:
             },
             "agents": self.lifecycle.get_all_status(),
             "health": self.health.get_all_status(),
-            "config": self.config.model_dump(),
         }
 
 

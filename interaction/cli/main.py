@@ -21,11 +21,10 @@ def cli(ctx, config, verbose, output_format):
 
 
 @cli.command()
-@click.option("--config", default="config.yaml", help="配置文件路径")
-def run(config):
+def run():
     """启动 Pulsar Daemon"""
     from runtime.main import run as runtime_run
-    runtime_run(config_path=config)
+    runtime_run()
 
 
 cli.add_command(publish_group)
@@ -37,3 +36,7 @@ cli.add_command(system_group)
 
 def main():
     cli()
+
+
+if __name__ == "__main__":
+    main()
