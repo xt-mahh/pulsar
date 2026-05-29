@@ -24,16 +24,11 @@ async def run_repl():
             # Use prompt_toolkit for rich input
             from prompt_toolkit import PromptSession
             from prompt_toolkit.history import FileHistory
-            from prompt_toolkit.styles import Style
-            
             try:
                 session = PromptSession(
                     history=FileHistory(".pulsar_history"),
-                    style=Style.from_dict({
-                        "prompt": "ansibrightgreen bold",
-                    }),
                 )
-                user_input = await session.prompt_async("> ", style="class:prompt")
+                user_input = await session.prompt_async("> [Pulsar] ")
             except ImportError:
                 # Fallback to simple input if prompt_toolkit unavailable
                 user_input = input("> ")
