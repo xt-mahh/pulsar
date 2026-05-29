@@ -9,3 +9,5 @@ data/
 .ruff_cache/
 dist/
 build/
+test_import*.py
+.vscode/
