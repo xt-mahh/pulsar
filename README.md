@@ -48,7 +48,13 @@ Pulsar 采用 **五层架构**，从底层运行时到顶层交互，层层解�
 ### 安装
 
 ```bash
-pip install pulsar
+# 从源码安装（推荐）
+git clone https://github.com/xt-mahh/pulsar.git
+cd pulsar
+pip install -e ".[dev]"
+
+# 或直接使用 pip 从 GitHub 安装
+pip install git+https://github.com/xt-mahh/pulsar.git
 ```
 
 ### 使用
