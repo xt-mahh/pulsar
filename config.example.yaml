@@ -1,0 +1,14 @@
+system:
+  name: "Pulsar"
+  version: "0.1.0"
+gateway:
+  default_provider: deepseek
+  providers:
+    deepseek:
+      type: openai
+      base_url: "https://api.deepseek.com/v1"
+      api_key: "${DEEPSEEK_API_KEY}"
+      model: "deepseek-chat"
+interaction:
+  cli:
+    enabled: true
